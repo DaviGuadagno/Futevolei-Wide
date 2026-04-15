@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Futevolei Wide - Dashboard de Gestão</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0172c1 0%, #015a9e 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .logo h1 {
+            color: #0172c1;
+            font-size: 24px;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .user-role {
+            padding: 5px 15px;
+            border-radius: 20px;
+            background: #0172c1;
+            color: white;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            padding: 8px 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-title {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .tabs {
+            background: white;
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #0172c1;
+            color: white;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: #28a745;
+            color: white;
+        }
+
+        .content-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .content-panel.active {
+            display: block;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #0172c1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #015a9e;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filters input, .filters select {
+            width: auto;
+            min-width: 150px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pago {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pendente {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-atrasado {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0172c1 0%, #015a9e 100%);
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .login-box h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #0172c1;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .filters {
+                flex-direction: column;
+            }
+            
+            .filters input, .filters select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginContainer" class="login-container">
+        <div class="login-box">
+            <h2>🏐 Futevolei Wide</h2>
+            <div id="loginError" class="error-message"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required placeholder="Digite seu email">
+                </div>
+                <div class="form-group">
+                    <label>Senha</label>
+                    <input type="password" id="loginPassword" required placeholder="Digite sua senha">
+                </div>
+                <button type="submit" style="width: 100%;">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboardContainer" style="display: none;">
+        <div class="container">
+            <div class="header">
+                <div class="logo">
+                    <h1>🏐 Futevolei Wide</h1>
+                    <p>Centro de Treinamento</p>
+                </div>
+                <div class="user-info">
+                    <span id="userName" class="user-role"></span>
+                    <button class="logout-btn" onclick="logout()">Sair</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-title">Total de Alunos</div>
+                    <div class="stat-value" id="totalAlunos">0</div>
+                    <div class="stat-change">Ativos este mês</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Receita do Mês</div>
+                    <div class="stat-value" id="receitaMes">R$ 0</div>
+                    <div class="stat-change">vs mês anterior</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Inadimplência</div>
+                    <div class="stat-value" id="inadimplencia">0%</div>
+                    <div class="stat-change">Pagamentos pendentes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Taxa de Ocupação</div>
+                    <div class="stat-value" id="taxaOcupacao">0%</div>
+                    <div class="stat-change">Turmas disponíveis</div>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('alunos')">📋 Alunos</button>
+                <button class="tab-btn" onclick="switchTab('financeiro')">💰 Financeiro</button>
+                <button class="tab-btn" onclick="switchTab('relatorios')">📊 Relatórios</button>
+            </div>
+
+            <div id="alunosPanel" class="content-panel active">
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Gerenciar Alunos</h3>
+                    <button id="addAlunoBtn" onclick="openAlunoModal()">+ Novo Aluno</button>
+                </div>
+                <div class="filters">
+                    <input type="text" id="searchAluno" placeholder="Buscar aluno..." onkeyup="filterAlunos()">
+                    <select id="statusFilter" onchange="filterAlunos()">
+                        <option value="todos">Todos os status</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="inativo">Inativos</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="alunosTable">
+                        <thead>
+                            <tr><th>Nome</th><th>Telefone</th><th>Status</th><th>Mensalidade</th><th>Ações</th></tr>
+                        </thead>
+                        <tbody id="alunosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="financeiroPanel" class="content-panel">
+                <h3>Controle Financeiro</h3>
+                <div class="filters">
+                    <input type="month" id="mesFiltro" onchange="carregarPagamentos()">
+                    <select id="statusPagamentoFilter" onchange="carregarPagamentos()">
+                        <option value="todos">Todos</option>
+                        <option value="pago">Pagos</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="atrasado">Atrasados</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>Aluno</th><th>Mês Referência</th><th>Valor</th><th>Status</th><th>Data Pagamento</th><th>Ações</th></tr>
+                        </thead>
+                        <tbody id="pagamentosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="relatoriosPanel" class="content-panel">
+                <h3>Relatórios Financeiros</h3>
+                <div class="filters">
+                    <input type="date" id="dataInicio">
+                    <input type="date" id="dataFim">
+                    <button onclick="gerarRelatorio()">Gerar Relatório</button>
+                </div>
+                <canvas id="relatorioChart" style="max-height: 400px; margin-top: 20px;"></canvas>
+                <div id="relatorioDetalhes" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="alunoModal" class="modal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Novo Aluno</h3>
+            <form id="alunoForm">
+                <input type="hidden" id="alunoId">
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="alunoNome" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="tel" id="alunoTelefone" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="alunoEmail">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="alunoStatus">
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Valor Mensalidade (R$)</label>
+                    <input type="number" id="alunoValor" step="0.01" required>
+                </div>
+                <button type="submit">Salvar</button>
+                <button type="button" onclick="closeAlunoModal()" class="btn-danger">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="pagamentoModal" class="modal">
+        <div class="modal-content">
+            <h3>Registrar Pagamento</h3>
+            <form id="pagamentoForm">
+                <input type="hidden" id="pagamentoId">
+                <div class="form-group">
+                    <label>Aluno</label>
+                    <select id="pagamentoAlunoId" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Mês Referência</label>
+                    <input type="month" id="pagamentoMes" required>
+                </div>
+                <div class="form-group">
+                    <label>Valor (R$)</label>
+                    <input type="number" id="pagamentoValor" step="0.01" required>
+                </div>
+                <button type="submit">Registrar Pagamento</button>
+                <button type="button" onclick="closePagamentoModal()" class="btn-danger">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // USUÁRIOS CADASTRADOS
+        const usuarios = {
+            "rd.alves@futevoleiwide.com": { 
+                password: "Rd123@", 
+                role: "admin", 
+                name: "RD Alves" 
+            },
+            "daviguadagno@futevoleiwide.com": { 
+                password: "Tiagodavi20@", 
+                role: "admin", 
+                name: "Davi Guadagno" 
+            }
+        };
+
+        let currentUser = null;
+        let currentUserRole = null;
+        let relatorioChart = null;
+
+        let alunos = [
+            { id: 1, nome: "Carlos Silva", telefone: "(11) 99999-1111", email: "carlos@email.com", status: "ativo", valor_mensalidade: 250.00 },
+            { id: 2, nome: "Rafael Santos", telefone: "(11) 99999-2222", email: "rafael@email.com", status: "ativo", valor_mensalidade: 250.00 },
+            { id: 3, nome: "Fernanda Lima", telefone: "(11) 99999-3333", email: "fernanda@email.com", status: "inativo", valor_mensalidade: 250.00 }
+        ];
+
+        let pagamentos = [
+            { id: 1, aluno_id: 1, mes_referencia: "2026-03", valor: 250.00, status: "pago", data_pagamento: "2026-03-10" },
+            { id: 2, aluno_id: 1, mes_referencia: "2026-04", valor: 250.00, status: "pendente", data_pagamento: null },
+            { id: 3, aluno_id: 2, mes_referencia: "2026-04", valor: 250.00, status: "pago", data_pagamento: "2026-04-05" },
+            { id: 4, aluno_id: 3, mes_referencia: "2026-03", valor: 250.00, status: "atrasado", data_pagamento: null }
+        ];
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (usuarios[email] && usuarios[email].password === password) {
+                currentUser = email;
+                currentUserRole = usuarios[email].role;
+                showDashboard();
+            } else {
+                const errorDiv = document.getElementById('loginError');
+                errorDiv.textContent = "Email ou senha inválidos!";
+                errorDiv.style.display = "block";
+                setTimeout(() => errorDiv.style.display = "none", 3000);
+            }
+        });
+
+        function showDashboard() {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('dashboardContainer').style.display = 'block';
+            document.getElementById('userName').textContent = usuarios[currentUser].name + ` (${currentUserRole === 'admin' ? 'Admin' : 'Usuário'})`;
+            
+            carregarDashboard();
+            carregarAlunos();
+            carregarPagamentos();
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('dashboardContainer').style.display = 'none';
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function carregarDashboard() {
+            const totalAlunos = alunos.filter(a => a.status === 'ativo').length;
+            document.getElementById('totalAlunos').textContent = totalAlunos;
+            
+            const mesAtual = new Date().toISOString().slice(0, 7);
+            const receitas = pagamentos.filter(p => p.status === 'pago' && p.mes_referencia === mesAtual);
+            const totalReceitas = receitas.reduce((sum, p) => sum + p.valor, 0);
+            document.getElementById('receitaMes').textContent = `R$ ${totalReceitas.toFixed(2)}`;
+            
+            const totalAlunosAtivos = alunos.filter(a => a.status === 'ativo').length;
+            const pendentes = pagamentos.filter(p => p.status === 'pendente' || p.status === 'atrasado').length;
+            const inadimplencia = totalAlunosAtivos > 0 ? (pendentes / totalAlunosAtivos) * 100 : 0;
+            document.getElementById('inadimplencia').textContent = `${inadimplencia.toFixed(1)}%`;
+            
+            const taxaOcupacao = Math.min(100, (totalAlunosAtivos / 50) * 100);
+            document.getElementById('taxaOcupacao').textContent = `${taxaOcupacao.toFixed(0)}%`;
+        }
+
+        function carregarAlunos() {
+            const tbody = document.getElementById('alunosTableBody');
+            tbody.innerHTML = '';
+            
+            const searchTerm = document.getElementById('searchAluno').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            const filtered = alunos.filter(aluno => {
+                const matchSearch = aluno.nome.toLowerCase().includes(searchTerm);
+                const matchStatus = statusFilter === 'todos' || aluno.status === statusFilter;
+                return matchSearch && matchStatus;
+            });
+            
+            filtered.forEach(aluno => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = aluno.nome;
+                row.insertCell(1).textContent = aluno.telefone;
+                row.insertCell(2).innerHTML = `<span class="status-badge status-${aluno.status === 'ativo' ? 'pago' : 'pendente'}">${aluno.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>`;
+                row.insertCell(3).textContent = `R$ ${aluno.valor_mensalidade.toFixed(2)}`;
+                
+                const actions = row.insertCell(4);
+                actions.innerHTML = `
+                    <button onclick="editarAluno(${aluno.id})" style="margin-right: 5px;">✏️</button>
+                    <button onclick="excluirAluno(${aluno.id})" class="btn-danger">🗑️</button>
+                    <button onclick="abrirPagamentoModal(${aluno.id})" class="btn-success">💰</button>
+                `;
+            });
+        }
+
+        function filterAlunos() {
+            carregarAlunos();
+        }
+
+        function openAlunoModal() {
+            document.getElementById('modalTitle').textContent = 'Novo Aluno';
+            document.getElementById('alunoId').value = '';
+            document.getElementById('alunoForm').reset();
+            document.getElementById('alunoModal').style.display = 'flex';
+        }
+
+        function closeAlunoModal() {
+            document.getElementById('alunoModal').style.display = 'none';
+        }
+
+        function editarAluno(id) {
+            const aluno = alunos.find(a => a.id === id);
+            if (aluno) {
+                document.getElementById('modalTitle').textContent = 'Editar Aluno';
+                document.getElementById('alunoId').value = aluno.id;
+                document.getElementById('alunoNome').value = aluno.nome;
+                document.getElementById('alunoTelefone').value = aluno.telefone;
+                document.getElementById('alunoEmail').value = aluno.email;
+                document.getElementById('alunoStatus').value = aluno.status;
+                document.getElementById('alunoValor').value = aluno.valor_mensalidade;
+                document.getElementById('alunoModal').style.display = 'flex';
+            }
+        }
+
+        function excluirAluno(id) {
+            if (confirm('Tem certeza que deseja excluir este aluno?')) {
+                alunos = alunos.filter(a => a.id !== id);
+                pagamentos = pagamentos.filter(p => p.aluno_id !== id);
+                carregarAlunos();
+                carregarDashboard();
+            }
+        }
+
+        document.getElementById('alunoForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('alunoId').value;
+            const alunoData = {
+                nome: document.getElementById('alunoNome').value,
+                telefone: document.getElementById('alunoTelefone').value,
+                email: document.getElementById('alunoEmail').value,
+                status: document.getElementById('alunoStatus').value,
+                valor_mensalidade: parseFloat(document.getElementById('alunoValor').value)
+            };
+            
+            if (id) {
+                const index = alunos.findIndex(a => a.id == id);
+                if (index !== -1) {
+                    alunos[index] = { ...alunos[index], ...alunoData };
+                }
+            } else {
+                const newId = Math.max(...alunos.map(a => a.id), 0) + 1;
+                alunos.push({ id: newId, ...alunoData });
+            }
+            
+            closeAlunoModal();
+            carregarAlunos();
+            carregarDashboard();
+        });
+
+        function carregarPagamentos() {
+            const tbody = document.getElementById('pagamentosTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            const mesFiltro = document.getElementById('mesFiltro')?.value || new Date().toISOString().slice(0, 7);
+            const statusFilter = document.getElementById('statusPagamentoFilter')?.value || 'todos';
+            
+            const filtered = pagamentos.filter(pag => {
+                const matchMes = pag.mes_referencia === mesFiltro;
+                const matchStatus = statusFilter === 'todos' || pag.status === statusFilter;
+                return matchMes && matchStatus;
+            });
+            
+            filtered.forEach(pag => {
+                const aluno = alunos.find(a => a.id === pag.aluno_id);
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = aluno ? aluno.nome : 'N/A';
+                row.insertCell(1).textContent = pag.mes_referencia;
+                row.insertCell(2).textContent = `R$ ${pag.valor.toFixed(2)}`;
+                row.insertCell(3).innerHTML = `<span class="status-badge status-${pag.status}">${pag.status.toUpperCase()}</span>`;
+                row.insertCell(4).textContent = pag.data_pagamento || '-';
+                
+                const actions = row.insertCell(5);
+                if (pag.status !== 'pago') {
+                    actions.innerHTML = `<button onclick="registrarPagamento(${pag.id})" class="btn-success">💰 Receber</button>`;
+                } else {
+                    actions.textContent = '-';
+                }
+            });
+        }
+
+        function abrirPagamentoModal(alunoId) {
+            const aluno = alunos.find(a => a.id === alunoId);
+            if (aluno) {
+                const select = document.getElementById('pagamentoAlunoId');
+                select.innerHTML = `<option value="${aluno.id}">${aluno.nome}</option>`;
+                select.disabled = true;
+                document.getElementById('pagamentoMes').value = new Date().toISOString().slice(0, 7);
+                document.getElementById('pagamentoValor').value = aluno.valor_mensalidade;
+                document.getElementById('pagamentoModal').style.display = 'flex';
+            }
+        }
+
+        function closePagamentoModal() {
+            document.getElementById('pagamentoModal').style.display = 'none';
+        }
+
+        function registrarPagamento(pagamentoId) {
+            const pagamento = pagamentos.find(p => p.id === pagamentoId);
+            if (pagamento) {
+                pagamento.status = 'pago';
+                pagamento.data_pagamento = new Date().toISOString().slice(0, 10);
+                carregarPagamentos();
+                carregarDashboard();
+                alert('✅ Pagamento registrado com sucesso!');
+            }
+        }
+
+        document.getElementById('pagamentoForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const alunoId = parseInt(document.getElementById('pagamentoAlunoId').value);
+            const mes = document.getElementById('pagamentoMes').value;
+            const valor = parseFloat(document.getElementById('pagamentoValor').value);
+            
+            const existingPayment = pagamentos.find(p => p.aluno_id === alunoId && p.mes_referencia === mes);
+            if (existingPayment) {
+                existingPayment.status = 'pago';
+                existingPayment.data_pagamento = new Date().toISOString().slice(0, 10);
+            } else {
+                const newId = Math.max(...pagamentos.map(p => p.id), 0) + 1;
+                pagamentos.push({
+                    id: newId,
+                    aluno_id: alunoId,
+                    mes_referencia: mes,
+                    valor: valor,
+                    status: 'pago',
+                    data_pagamento: new Date().toISOString().slice(0, 10)
+                });
+            }
+            
+            closePagamentoModal();
+            carregarPagamentos();
+            carregarDashboard();
+            alert('✅ Pagamento registrado com sucesso!');
+        });
+
+        function gerarRelatorio() {
+            const dataInicio = document.getElementById('dataInicio').value;
+            const dataFim = document.getElementById('dataFim').value;
+            
+            if (!dataInicio || !dataFim) {
+                alert('Selecione as datas de início e fim');
+                return;
+            }
+            
+            const pagamentosPeriodo = pagamentos.filter(p => {
+                if (!p.data_pagamento) return false;
+                return p.data_pagamento >= dataInicio && p.data_pagamento <= dataFim;
+            });
+            
+            const totalRecebido = pagamentosPeriodo.reduce((sum, p) => sum + p.valor, 0);
+            const pagamentosPorDia = {};
+            
+            pagamentosPeriodo.forEach(p => {
+                if (!pagamentosPorDia[p.data_pagamento]) {
+                    pagamentosPorDia[p.data_pagamento] = 0;
+                }
+                pagamentosPorDia[p.data_pagamento] += p.valor;
+            });
+            
+            const labels = Object.keys(pagamentosPorDia).sort();
+            const values = labels.map(l => pagamentosPorDia[l]);
+            
+            if (relatorioChart) {
+                relatorioChart.destroy();
+            }
+            
+            const ctx = document.getElementById('relatorioChart').getContext('2d');
+            relatorioChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Receitas por Dia (R$)',
+                        data: values,
+                        borderColor: '#0172c1',
+                        backgroundColor: 'rgba(1, 114, 193, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true
+                }
+            });
+            
+            document.getElementById('relatorioDetalhes').innerHTML = `
+                <div class="stats-grid" style="margin-top: 20px;">
+                    <div class="stat-card">
+                        <div class="stat-title">Total Recebido</div>
+                        <div class="stat-value">R$ ${totalRecebido.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Total de Pagamentos</div>
+                        <div class="stat-value">${pagamentosPeriodo.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Média por Pagamento</div>
+                        <div class="stat-value">R$ ${pagamentosPeriodo.length > 0 ? (totalRecebido / pagamentosPeriodo.length).toFixed(2) : 0}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchTab(tab) {
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Hide all panels
+            document.querySelectorAll('.content-panel').forEach(panel => panel.classList.remove('active'));
+            // Show selected panel
+            document.getElementById(`${tab}Panel`).classList.add('active');
+            
+            if (tab === 'relatorios') {
+                document.getElementById('dataInicio').value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+                document.getElementById('dataFim').value = new Date().toISOString().slice(0, 10);
+                gerarRelatorio();
+            }
+        }
+
+        function atualizarStatusPagamentos() {
+            const mesAtual = new Date().toISOString().slice(0, 7);
+            pagamentos.forEach(pag => {
+                if (pag.status !== 'pago' && pag.mes_referencia < mesAtual) {
+                    pag.status = 'atrasado';
+                }
+            });
+            carregarPagamentos();
+        }
+        
+        setInterval(atualizarStatusPagamentos, 3600000);
+        atualizarStatusPagamentos();
+    </script>
+</body>
+</html>
