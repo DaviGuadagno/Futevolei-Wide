@@ -227,26 +227,33 @@ function Lines({series,labels,height=240}){
 
 /* ============================ Páginas ============================ */
 function Dashboard({students,plans,tx}){
+  const [mes,setMes]=useState(ym(today));
   const planById=id=>plans.find(p=>p.id===id);
   const active=students.filter(s=>payStatus(s)!=="cancelado");
   const inad=students.filter(s=>payStatus(s)==="inadimplente");
   const aberto=students.filter(s=>payStatus(s)==="em aberto");
   const mrr=active.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
   const inadV=inad.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
-  const tm=ym(today);
-  const caixa=tx.filter(t=>t.type==="entrada"&&(t.date||"").startsWith(tm)).reduce((a,t)=>a+t.amount,0);
+  const caixa=tx.filter(t=>t.type==="entrada"&&(t.date||"").startsWith(mes)).reduce((a,t)=>a+t.amount,0);
   const byPlan=plans.map((p,i)=>({label:p.name,value:active.filter(s=>s.planId===p.id).length,
     receita:active.filter(s=>s.planId===p.id).length*p.price,color:PALETTE[i%5]}));
+  const periods=useMemo(()=>{const s=new Set(tx.map(t=>(t.date||"").slice(0,7)).filter(Boolean));s.add(ym(today));return[...s].sort().reverse();},[tx]);
+  const mesLabel=(m)=>{const[y,mo]=m.split("-");return `${MS[+mo-1]}/${y}`;};
 
   const monthly=useMemo(()=>{const m={};tx.forEach(t=>{const k=(t.date||"").slice(0,7);if(!k)return;if(t.type!=="entrada")return;m[k]=(m[k]||0)+t.amount;});
     const ks=Object.keys(m).sort();return ks.map(k=>({mes:MS[+k.split("-")[1]-1],e:m[k]}));},[tx]);
   const grow=monthly.length>=2&&monthly.at(-2).e? ((monthly.at(-1).e-monthly.at(-2).e)/monthly.at(-2).e*100):0;
 
   return (<div className="grid" style={{gap:16}}>
+    <div className="row" style={{justifyContent:"flex-end"}}>
+      <select className="input" style={{width:"auto"}} value={mes} onChange={e=>setMes(e.target.value)}>
+        {periods.map(p=><option key={p} value={p}>{mesLabel(p)}</option>)}
+      </select>
+    </div>
     <div className="grid cols-4">
       <Stat icon={IC.users} label="Alunos ativos" value={active.length} sub={`${students.length} cadastrados`}/>
       <Stat icon={IC.wallet} label="Receita recorrente" value={fmt(mrr)} sub="Mensalidades ativas" tone="accent"/>
-      <Stat icon={IC.wallet} label="Caixa" value={fmt(caixa)} sub={`Entradas em ${MS[today.getMonth()]}/${today.getFullYear()}`} tone="good"/>
+      <Stat icon={IC.wallet} label="Caixa" value={fmt(caixa)} sub={`Entradas em ${mesLabel(mes)}`} tone="good"/>
       <Stat icon={IC.warn} label="Inadimplência" value={fmt(inadV)} sub={`${inad.length} em atraso · ${aberto.length} em aberto`} tone="bad"/>
     </div>
     <div className="grid cols-2">
@@ -276,7 +283,7 @@ function Dashboard({students,plans,tx}){
     <div className="grid cols-2">
       <div className="card"><h3 style={{marginBottom:6}}>Alunos por plano</h3><Bars data={byPlan}/></div>
       <div className="card">
-        <h3>Resumo do mês</h3><p className="stat-s" style={{marginBottom:12}}>{MS[today.getMonth()]}/{today.getFullYear()}</p>
+        <h3>Resumo do mês</h3><p className="stat-s" style={{marginBottom:12}}>{mesLabel(mes)}</p>
         {[["Receita recorrente estimada",fmt(mrr),"var(--accent)"],
           ["Caixa do mês",fmt(caixa),"var(--good)"],
           ["Ticket médio (ativos)",fmt(active.length?mrr/active.length:0),"var(--txt)"]
@@ -296,17 +303,18 @@ function Alunos({students,plans,tx,canEdit}){
   const blank={name:"",phone:"",email:"",planId:plans[0]?.id||"",dueStart:1,dueEnd:7,status:"ativo",freq:0};
   const list=students.filter(s=>(f==="todos"||payStatus(s)===f)&&s.name.toLowerCase().includes(q.toLowerCase()));
   const onSave=st=>{const{id,...d}=st; (id?put("students",id,d):add("students",d)); setModal(null);};
-  const mref=s=>`mens_${s.id}_${ym(today)}`;
-  const confirmarPago=(s,valor)=>{
-    const ref=mref(s);
+  const mref=(s,mesRef)=>`mens_${s.id}_${mesRef}`;
+  const confirmarPago=(s,valor,data)=>{
+    const mesRef=data.slice(0,7);
+    const ref=mref(s,mesRef);
     // remove qualquer lançamento anterior com a mesma referência (evita duplicar)
     tx.filter(t=>t.mref===ref).forEach(t=>del("transactions",t.id));
-    add("transactions",{type:"entrada",cat:`Mensalidade — ${s.name}`,amount:+valor,date:ym(today)+"-"+String(today.getDate()).padStart(2,"0"),mref:ref});
-    put("students",s.id,{lastPaid:ym(today)});
+    add("transactions",{type:"entrada",cat:`Mensalidade — ${s.name}`,amount:+valor,date:data,mref:ref});
+    put("students",s.id,{lastPaid:mesRef});
     setPayModal(null);
   };
   const desfazer=s=>{
-    const ref=mref(s);
+    const ref=mref(s,ym(today));
     tx.filter(t=>t.mref===ref).forEach(t=>del("transactions",t.id));
     put("students",s.id,{lastPaid:""});
   };
@@ -336,7 +344,7 @@ function Alunos({students,plans,tx,canEdit}){
             {canEdit&&<td><div className="row" style={{justifyContent:"flex-end",gap:6}}>
               {payStatus(s)!=="cancelado" && (payStatus(s)==="em dia"
                 ? <button className="btn" style={{padding:"4px 9px",fontSize:12}} onClick={()=>desfazer(s)}>Desfazer</button>
-                : <button className="btn btn-accent" style={{padding:"4px 9px",fontSize:12}} onClick={()=>setPayModal({s,valor:planPrice(s.planId)})}>Marcar pago</button>)}
+                : <button className="btn btn-accent" style={{padding:"4px 9px",fontSize:12}} onClick={()=>setPayModal({s,valor:planPrice(s.planId),data:ym(today)+"-"+String(today.getDate()).padStart(2,"0")})}>Marcar pago</button>)}
               <button className="icobtn" onClick={()=>setModal(s)}><I d={IC.pen} size={15}/></button>
               <button className="icobtn" onClick={()=>del("students",s.id)}><I d={IC.trash} size={15}/></button>
             </div></td>}
@@ -352,13 +360,19 @@ function Alunos({students,plans,tx,canEdit}){
 }
 function PagamentoForm({initial,onConfirm,onClose}){
   const [v,setV]=useState(initial.valor);
-  return (<><Field label="Valor recebido (R$)">
-    <input type="number" step="0.01" className="input" value={v} onChange={e=>setV(e.target.value)} autoFocus/>
-  </Field>
-  <p className="stat-s" style={{marginTop:8}}>Será lançada uma entrada no Financeiro como "Mensalidade — {initial.s.name}" referente a este mês.</p>
+  const [dt,setDt]=useState(initial.data);
+  return (<><div className="grid cols-2" style={{gap:12}}>
+    <Field label="Valor recebido (R$)">
+      <input type="number" step="0.01" className="input" value={v} onChange={e=>setV(e.target.value)} autoFocus/>
+    </Field>
+    <Field label="Data do pagamento">
+      <input type="date" className="input" value={dt} onChange={e=>setDt(e.target.value)}/>
+    </Field>
+  </div>
+  <p className="stat-s" style={{marginTop:8}}>Será lançada uma entrada no Financeiro como "Mensalidade — {initial.s.name}" na data selecionada.</p>
   <div className="row" style={{justifyContent:"flex-end",gap:10,marginTop:20}}>
     <button className="btn" onClick={onClose}>Cancelar</button>
-    <button className="btn btn-accent" onClick={()=>onConfirm(initial.s,v)}>Confirmar pagamento</button></div></>);
+    <button className="btn btn-accent" onClick={()=>onConfirm(initial.s,v,dt)}>Confirmar pagamento</button></div></>);
 }
 function StudentForm({initial,plans,onClose,onSave}){
   const [f,setF]=useState(initial); const set=(k,v)=>setF({...f,[k]:v});
