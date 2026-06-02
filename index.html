@@ -234,36 +234,32 @@ function Dashboard({students,plans,tx}){
   const mrr=active.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
   const inadV=inad.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
   const tm=ym(today);
-  const desp=tx.filter(t=>t.type==="saida"&&(t.date||"").startsWith(tm)).reduce((a,t)=>a+t.amount,0);
+  const caixa=tx.filter(t=>t.type==="entrada"&&(t.date||"").startsWith(tm)).reduce((a,t)=>a+t.amount,0);
   const byPlan=plans.map((p,i)=>({label:p.name,value:active.filter(s=>s.planId===p.id).length,
     receita:active.filter(s=>s.planId===p.id).length*p.price,color:PALETTE[i%5]}));
 
-  const monthly=useMemo(()=>{const m={};tx.forEach(t=>{const k=(t.date||"").slice(0,7);if(!k)return;m[k]=m[k]||{e:0,s:0};m[k][t.type==="entrada"?"e":"s"]+=t.amount;});
-    const ks=Object.keys(m).sort();return ks.map(k=>({mes:MS[+k.split("-")[1]-1],e:m[k].e,s:m[k].s,l:m[k].e-m[k].s}));},[tx]);
+  const monthly=useMemo(()=>{const m={};tx.forEach(t=>{const k=(t.date||"").slice(0,7);if(!k)return;if(t.type!=="entrada")return;m[k]=(m[k]||0)+t.amount;});
+    const ks=Object.keys(m).sort();return ks.map(k=>({mes:MS[+k.split("-")[1]-1],e:m[k]}));},[tx]);
   const grow=monthly.length>=2&&monthly.at(-2).e? ((monthly.at(-1).e-monthly.at(-2).e)/monthly.at(-2).e*100):0;
 
   return (<div className="grid" style={{gap:16}}>
     <div className="grid cols-4">
       <Stat icon={IC.users} label="Alunos ativos" value={active.length} sub={`${students.length} cadastrados`}/>
       <Stat icon={IC.wallet} label="Receita recorrente" value={fmt(mrr)} sub="Mensalidades ativas" tone="accent"/>
-      <Stat icon={IC.down} label="Despesas do mês" value={fmt(desp)} sub={`${MS[today.getMonth()]}/${today.getFullYear()}`} tone="bad"/>
+      <Stat icon={IC.wallet} label="Caixa" value={fmt(caixa)} sub={`Entradas em ${MS[today.getMonth()]}/${today.getFullYear()}`} tone="good"/>
       <Stat icon={IC.warn} label="Inadimplência" value={fmt(inadV)} sub={`${inad.length} em atraso · ${aberto.length} em aberto`} tone="bad"/>
     </div>
     <div className="grid cols-2">
       <div className="card">
         <div className="row" style={{justifyContent:"space-between",marginBottom:6}}>
-          <h3>Receita × Despesa</h3>
+          <h3>Receita mensal</h3>
           <span style={{fontSize:12,color:grow>=0?"var(--good)":"var(--bad)"}} className="row">
             <I d={grow>=0?IC.up:IC.down} size={14}/>{grow.toFixed(1)}%</span>
         </div>
         <Lines labels={monthly.map(m=>m.mes)} series={[
-          {points:monthly.map(m=>m.e),color:"var(--good)"},
-          {points:monthly.map(m=>m.s),color:"var(--bad)"},
-          {points:monthly.map(m=>m.l),color:"var(--accent)"}]}/>
+          {points:monthly.map(m=>m.e),color:"var(--accent)"}]}/>
         <div className="row" style={{gap:16,marginTop:8,fontSize:12,color:"var(--muted)"}}>
-          <span className="row"><span className="dot" style={{background:"var(--good)"}}/>Receita</span>
-          <span className="row"><span className="dot" style={{background:"var(--bad)"}}/>Despesa</span>
-          <span className="row"><span className="dot" style={{background:"var(--accent)"}}/>Lucro</span>
+          <span className="row"><span className="dot" style={{background:"var(--accent)"}}/>Receita</span>
         </div>
       </div>
       <div className="card">
@@ -281,9 +277,8 @@ function Dashboard({students,plans,tx}){
       <div className="card"><h3 style={{marginBottom:6}}>Alunos por plano</h3><Bars data={byPlan}/></div>
       <div className="card">
         <h3>Resumo do mês</h3><p className="stat-s" style={{marginBottom:12}}>{MS[today.getMonth()]}/{today.getFullYear()}</p>
-        {[["Receita recorrente estimada",fmt(mrr),"var(--good)"],
-          ["Despesas do mês",fmt(desp),"var(--bad)"],
-          ["Resultado estimado",fmt(mrr-desp),mrr-desp>=0?"var(--accent)":"var(--bad)"],
+        {[["Receita recorrente estimada",fmt(mrr),"var(--accent)"],
+          ["Caixa do mês",fmt(caixa),"var(--good)"],
           ["Ticket médio (ativos)",fmt(active.length?mrr/active.length:0),"var(--txt)"]
         ].map(([k,v,c],i)=>(<div key={i} className="row" style={{justifyContent:"space-between",borderBottom:"1px solid var(--border)",padding:"9px 0"}}>
           <span style={{color:"var(--muted)",fontSize:14}}>{k}</span>
