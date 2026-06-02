@@ -400,6 +400,14 @@ function Planos({plans,students,canEdit}){
   ].forEach(p=>add("plans",p));};
   const blankPlan={name:"",price:0,classes:"",benefits:""};
   const savePlan=p=>{const{id,...d}=p; (id?put("plans",id,d):add("plans",d)); setEdit(null);};
+  const delPlan=p=>{
+    const vinculados=students.filter(s=>s.planId===p.id);
+    if(vinculados.length>0){
+      window.alert(`Não é possível excluir o plano "${p.name}": ${vinculados.length} aluno(s) ainda estão vinculados a ele. Mova esses alunos para outro plano antes de excluir.`);
+      return;
+    }
+    if(window.confirm(`Excluir o plano "${p.name}"? Esta ação não pode ser desfeita.`)) del("plans",p.id);
+  };
   if(plans.length===0) return (<div className="card" style={{textAlign:"center",padding:40}}>
     <p style={{color:"var(--muted)",marginBottom:16}}>Nenhum plano cadastrado ainda.</p>
     {canEdit?<div className="row" style={{justifyContent:"center",gap:10}}>
@@ -415,7 +423,10 @@ function Planos({plans,students,canEdit}){
     {plans.map((p,i)=>(<div key={p.id} className="card" style={{display:"flex",flexDirection:"column"}}>
       <div className="row" style={{justifyContent:"space-between"}}>
         <span className="badge" style={{background:PALETTE[i%5]+"22",color:PALETTE[i%5]}}>Plano {i+1}</span>
-        {canEdit&&<button className="icobtn" onClick={()=>setEdit(p)}><I d={IC.pen} size={15}/></button>}
+        {canEdit&&<div className="row" style={{gap:2}}>
+          <button className="icobtn" onClick={()=>setEdit(p)}><I d={IC.pen} size={15}/></button>
+          <button className="icobtn" onClick={()=>delPlan(p)}><I d={IC.trash} size={15}/></button>
+        </div>}
       </div>
       <h3 style={{fontSize:20,marginTop:8}}>{p.name}</h3>
       <div className="tnum" style={{fontSize:30,fontWeight:800,color:PALETTE[i%5],marginTop:4}}>{fmt(p.price)}<span style={{fontSize:13,fontWeight:400,color:"var(--muted)"}}>/mês</span></div>
