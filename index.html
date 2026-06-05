@@ -234,7 +234,8 @@ function Dashboard({students,plans,tx}){
   const aberto=students.filter(s=>payStatus(s)==="em aberto");
   const mrr=active.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
   const inadV=inad.reduce((a,s)=>a+(planById(s.planId)?.price||0),0);
-  const caixa=tx.filter(t=>t.type==="entrada"&&(t.date||"").startsWith(mes)).reduce((a,t)=>a+t.amount,0);
+  const caixa=tx.filter(t=>(t.date||"").slice(0,7)<=mes).reduce((a,t)=>a+(t.type==="entrada"?(t.amount||0):-(t.amount||0)),0);
+  const movMes=tx.filter(t=>(t.date||"").startsWith(mes)).reduce((a,t)=>a+(t.type==="entrada"?(t.amount||0):-(t.amount||0)),0);
   const byPlan=plans.map((p,i)=>({label:p.name,value:active.filter(s=>s.planId===p.id).length,
     receita:active.filter(s=>s.planId===p.id).length*p.price,color:PALETTE[i%5]}));
   const periods=useMemo(()=>{const s=new Set(tx.map(t=>(t.date||"").slice(0,7)).filter(Boolean));s.add(ym(today));return[...s].sort().reverse();},[tx]);
@@ -253,7 +254,7 @@ function Dashboard({students,plans,tx}){
     <div className="grid cols-4">
       <Stat icon={IC.users} label="Alunos ativos" value={active.length} sub={`${students.length} cadastrados`}/>
       <Stat icon={IC.wallet} label="Receita recorrente" value={fmt(mrr)} sub="Mensalidades ativas" tone="accent"/>
-      <Stat icon={IC.wallet} label="Caixa" value={fmt(caixa)} sub={`Entradas em ${mesLabel(mes)}`} tone="good"/>
+      <Stat icon={IC.wallet} label="Caixa" value={fmt(caixa)} sub={`Saldo acumulado até ${mesLabel(mes)}`} tone={caixa>=0?"good":"bad"}/>
       <Stat icon={IC.warn} label="Inadimplência" value={fmt(inadV)} sub={`${inad.length} em atraso · ${aberto.length} em aberto`} tone="bad"/>
     </div>
     <div className="grid cols-2">
@@ -285,7 +286,8 @@ function Dashboard({students,plans,tx}){
       <div className="card">
         <h3>Resumo do mês</h3><p className="stat-s" style={{marginBottom:12}}>{mesLabel(mes)}</p>
         {[["Receita recorrente estimada",fmt(mrr),"var(--accent)"],
-          ["Caixa do mês",fmt(caixa),"var(--good)"],
+          ["Movimento do mês",fmt(movMes),movMes>=0?"var(--good)":"var(--bad)"],
+          ["Saldo acumulado (Caixa)",fmt(caixa),caixa>=0?"var(--good)":"var(--bad)"],
           ["Ticket médio (ativos)",fmt(active.length?mrr/active.length:0),"var(--txt)"]
         ].map(([k,v,c],i)=>(<div key={i} className="row" style={{justifyContent:"space-between",borderBottom:"1px solid var(--border)",padding:"9px 0"}}>
           <span style={{color:"var(--muted)",fontSize:14}}>{k}</span>
